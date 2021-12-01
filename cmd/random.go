@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -31,19 +33,33 @@ var randomCmd = &cobra.Command{
 	Short: "Get a random dad joke",
 	Long:  `This command fetches a random dad joke from the icanhazdadjoke api`,
 	Run: func(cmd *cobra.Command, args []string) {
-		getRandomJoke()
+		jokeTerm, _ := cmd.Flags().GetString("term")
+
+		if jokeTerm != "" {
+			getRandomJokeWithTerm((jokeTerm))
+		} else {
+			getRandomJoke()
+		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(randomCmd)
 
+	randomCmd.PersistentFlags().String("term", "", "A search term for a dad joke.")
 }
 
 type Joke struct {
 	ID     string `json:"id"`
 	Joke   string `json:"joke"`
 	Status int    `json:"status"`
+}
+
+type SearchResult struct {
+	Results    json.RawMessage `json:"results"`
+	SearchTerm string          `json:"search_term"`
+	Status     int             `json:"status"`
+	TotalJokes int             `json:"total_jokes"`
 }
 
 func getRandomJoke() {
@@ -57,6 +73,45 @@ func getRandomJoke() {
 	}
 
 	fmt.Println(string(joke.Joke))
+}
+
+func getRandomJokeWithTerm(jokeTerm string) {
+	length, results := getJokeDataWithTerm(jokeTerm)
+	randomizeJokeList(length, results)
+	// fmt.Println(results)
+}
+
+func randomizeJokeList(length int, jokeList []Joke) {
+	rand.Seed(time.Now().Unix())
+	min := 0
+	max := length - 1
+
+	if length <= 0 {
+		err := fmt.Errorf("No jokes found with this term")
+		fmt.Println(err.Error())
+	} else {
+		randomNum := min + rand.Intn(max-min)
+		fmt.Println(jokeList[randomNum])
+	}
+
+}
+
+func getJokeDataWithTerm(jokeTerm string) (totalJokes int, jokeList []Joke) {
+	url := fmt.Sprintf("https://icanhazdadjoke.com/search?term=%s", jokeTerm)
+	responseBytes := getJokeData(url)
+
+	jokeListRaw := SearchResult{}
+	err := json.Unmarshal(responseBytes, &jokeListRaw)
+	if err != nil {
+		log.Println("Could not unmarshall joke with term: %v", err)
+	}
+
+	jokes := []Joke{}
+	if err := json.Unmarshal(jokeListRaw.Results, &jokes); err != nil {
+		log.Println("Could not unmarshall joke list results: %v", err)
+
+	}
+	return jokeListRaw.TotalJokes, jokes
 }
 
 func getJokeData(baseAPIURL string) []byte {
