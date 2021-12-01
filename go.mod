@@ -1,4 +1,4 @@
-module github.com/thetajwar2003/Dad-Joke-CLI
+module github.com/thetajwar2003/dadjoke
 
 go 1.17
 
